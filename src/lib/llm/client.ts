@@ -2,13 +2,13 @@ import OpenAI from 'openai';
 import type { ModelConfig } from './models';
 import { hostOf } from '../observability';
 
-/** 懒加载百炼客户端 — 构建时不检查环境变量，只在运行时检查 */
+/** 懒加载百炼客户端（OpenAI 兼容协议）— 构建时不检查环境变量，只在运行时检查 */
 function getBailianClient(): OpenAI {
-  const apiKey = process.env.ANTHROPIC_AUTH_TOKEN;
-  const baseURL = process.env.ANTHROPIC_BASE_URL;
+  const apiKey = process.env.BAILIAN_API_KEY;
+  const baseURL = process.env.BAILIAN_BASE_URL;
 
   if (!apiKey || !baseURL) {
-    throw new Error('Missing ANTHROPIC_AUTH_TOKEN or ANTHROPIC_BASE_URL in environment');
+    throw new Error('Missing BAILIAN_API_KEY or BAILIAN_BASE_URL in environment');
   }
 
   return new OpenAI({ apiKey, baseURL });
@@ -46,8 +46,8 @@ export async function streamChat(
     provider: isGLM ? 'GLM' : '百炼代理',
     host: isGLM
       ? hostOf(process.env.GLM_BASE_URL ?? 'https://open.bigmodel.cn/api/paas/v4')
-      : hostOf(process.env.ANTHROPIC_BASE_URL),
-    hasKey: isGLM ? !!process.env.GLM_API_KEY : !!process.env.ANTHROPIC_AUTH_TOKEN,
+      : hostOf(process.env.BAILIAN_BASE_URL),
+    hasKey: isGLM ? !!process.env.GLM_API_KEY : !!process.env.BAILIAN_API_KEY,
   });
   return getClient(config.model).chat.completions.create(
     {

@@ -23,8 +23,8 @@ const envSchema = z.object({
   // LLM Provider：百炼代理（clarify/spec/locate 快模型 + generate 兜底）。
   // 此处均为可选：MOCK_LLM=1 冒烟不需要 key；真实调用时由 llm/client.ts
   // 惰性校验（缺 key 在首次调用处抛错，不阻塞服务启动与其他路由）
-  ANTHROPIC_AUTH_TOKEN: z.string().optional(),
-  ANTHROPIC_BASE_URL: z.string().optional(),
+  BAILIAN_API_KEY: z.string().optional(),
+  BAILIAN_BASE_URL: z.string().optional(),
   // GLM（generate 主路径）
   GLM_API_KEY: z.string().optional(),
   GLM_BASE_URL: z.string().optional(),
