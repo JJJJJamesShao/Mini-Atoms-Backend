@@ -134,10 +134,14 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        // Nginx 反代默认缓冲响应，SSE 会整段攒到结束才下发——显式关闭
+        'X-Accel-Buffering': 'no',
       });
       // 前端断开（关页/停止按钮本地断流）即取消 LLM 调用：
+      // 必须监听响应侧 close——request.raw 在客户端断开时不会可靠触发
+      // （orch L2 实测发现：kill curl 后流水线仍继续烧 token 至完成）。
       // Fastify 单进程下注册表完全可靠（迁出 serverless 的红利）
-      request.raw.on('close', () => runController.abort());
+      reply.raw.on('close', () => runController.abort());
 
       // 最近一次发送真实数据的时间（心跳以此为基准，只在静默期发）
       let lastActivity = Date.now();
