@@ -1,14 +1,21 @@
 import { Pool } from 'pg';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import type { Env } from './env.js';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as schema from '../models/schema.js';
+import { loadEnv } from './env.js';
 
-export type Database = ReturnType<typeof createDatabase>;
+export type Database = NodePgDatabase<typeof schema>;
+
+let pool: Pool | null = null;
+let db: Database | null = null;
 
 /**
- * 基于 pg 连接池创建 Drizzle 数据库实例，供业务层复用。
+ * 惰性单例数据库连接（对齐 mini-atoms getSupabase 的使用模式）：
+ * 首次调用时按环境变量建池，进程生命周期内复用。
  */
-export function createDatabase(env: Env) {
-  const pool = new Pool({
+export function getDb(): Database {
+  if (db) return db;
+  const env = loadEnv();
+  pool = new Pool({
     host: env.DB_HOST,
     port: env.DB_PORT,
     database: env.DB_NAME,
@@ -18,19 +25,18 @@ export function createDatabase(env: Env) {
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
   });
-
   pool.on('error', (err) => {
     console.error('数据库连接池出现意外错误', err);
   });
+  db = drizzle(pool, { schema });
+  return db;
+}
 
-  const db = drizzle(pool);
-
-  return {
-    db,
-    pool,
-    /** 关闭连接池，用于优雅停机 */
-    async close() {
-      await pool.end();
-    },
-  };
+/** 关闭连接池，用于优雅停机 */
+export async function closeDb(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+    db = null;
+  }
 }

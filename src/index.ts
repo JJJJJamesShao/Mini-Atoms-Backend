@@ -1,8 +1,12 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import jwt from '@fastify/jwt';
 import { loadEnv } from './config/env.js';
-import { createDatabase } from './config/database.js';
+import { closeDb } from './config/database.js';
+import { authRoutes } from './routes/auth.js';
+import { pipelineRoutes } from './routes/pipeline.js';
+import { projectRoutes } from './routes/projects.js';
 
 async function main() {
   const env = loadEnv();
@@ -10,10 +14,7 @@ async function main() {
 
   await app.register(helmet);
   await app.register(cors, { origin: true });
-
-  // 数据库连接池：创建后即复用，随进程生命周期管理；
-  // OSS 客户端见 src/config/oss.ts，待业务路由接入后实例化
-  const database = createDatabase(env);
+  await app.register(jwt, { secret: env.JWT_SECRET });
 
   // 统一错误处理
   app.setErrorHandler((error: unknown, request, reply) => {
@@ -32,12 +33,16 @@ async function main() {
 
   app.get('/health', async () => ({ status: 'ok' }));
 
+  await app.register(authRoutes);
+  await app.register(projectRoutes);
+  await app.register(pipelineRoutes);
+
   // 优雅关闭
   const shutdown = async (signal: string) => {
     app.log.info(`收到 ${signal}，开始优雅关闭`);
     try {
       await app.close();
-      await database.close();
+      await closeDb();
       process.exit(0);
     } catch (err) {
       app.log.error(err, '优雅关闭失败');

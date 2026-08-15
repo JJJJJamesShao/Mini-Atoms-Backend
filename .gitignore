@@ -39,6 +39,3 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
-
-# Drizzle
-drizzle/*.sql

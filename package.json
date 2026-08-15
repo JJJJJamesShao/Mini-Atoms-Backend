@@ -7,11 +7,13 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "eslint src",
-    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest run",
+    "lint": "eslint src tests scripts",
+    "format": "prettier --write \"{src,tests,scripts}/**/*.ts\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "user:promote": "tsx scripts/promote-user.ts",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "repository": {
@@ -29,10 +31,14 @@
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@fastify/helmet": "^13.1.0",
+    "@fastify/jwt": "^10.2.2",
+    "acorn": "^8.18.0",
     "ali-oss": "^6.23.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.12.0",
+    "node-html-parser": "^9.0.1",
+    "openai": "^7.4.0",
     "pg": "^8.23.0",
     "zod": "^4.4.3"
   },
@@ -47,6 +53,7 @@
     "prettier": "^3.9.6",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.67.0"
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
   }
 }
