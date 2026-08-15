@@ -20,11 +20,13 @@ const envSchema = z.object({
 
   JWT_SECRET: z.string().min(16),
 
-  // LLM Provider：百炼代理（clarify/spec/locate 快模型 + generate 兜底）
-  ANTHROPIC_AUTH_TOKEN: z.string().min(1),
-  ANTHROPIC_BASE_URL: z.string().min(1),
+  // LLM Provider：百炼代理（clarify/spec/locate 快模型 + generate 兜底）。
+  // 此处均为可选：MOCK_LLM=1 冒烟不需要 key；真实调用时由 llm/client.ts
+  // 惰性校验（缺 key 在首次调用处抛错，不阻塞服务启动与其他路由）
+  ANTHROPIC_AUTH_TOKEN: z.string().optional(),
+  ANTHROPIC_BASE_URL: z.string().optional(),
   // GLM（generate 主路径）
-  GLM_API_KEY: z.string().min(1),
+  GLM_API_KEY: z.string().optional(),
   GLM_BASE_URL: z.string().optional(),
   // 模型名覆盖（可选，缺省用代码内置值）
   GLM_5_2: z.string().optional(),
