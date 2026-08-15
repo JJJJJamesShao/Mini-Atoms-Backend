@@ -45,7 +45,9 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     const parsed = z.object({ pinned: z.boolean() }).safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: '缺少 pinned 字段' });
+      return reply
+        .code(400)
+        .send({ error: 'invalid_input', message: '缺少 pinned 字段' });
     }
     await togglePinProject(id, request.user.sub, parsed.data.pinned);
     return { success: true };

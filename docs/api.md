@@ -65,7 +65,7 @@
 
 #### SSE 事件协议
 
-每行 `data: <json>\n\n`。事件序列：`start` → 若干 `agent_event`（间杂 `heartbeat`）→ `project_created`/`project_updated` → `done`（或 `error`/`aborted`/`persist_error`）。
+每行 `data: <json>\n\n`。事件序列：`start` → 若干 `agent_event`（间杂 `heartbeat`）→ `project_created`/`project_updated` → `done`（终止）。`error`/`aborted` 为异常终止（替代 `done`）；`persist_error` 是**非终止**通知——落库失败时先于 `done` 发出，随后 `done` 照常到达，前端不得把它当流结束处理。
 
 | type | 关键字段 | 说明 |
 |---|---|---|

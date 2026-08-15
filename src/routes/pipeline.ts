@@ -86,7 +86,9 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const parsed = bodySchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: '缺少 input 字段' });
+        return reply
+          .code(400)
+          .send({ error: 'invalid_input', message: '缺少 input 字段' });
       }
       const { input, projectId, currentFiles, baseVersionNo } = parsed.data;
       const userId = request.user.sub;
