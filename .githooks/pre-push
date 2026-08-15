@@ -1,0 +1,55 @@
+#!/bin/bash
+# pre-push hook: 阻止直接向 main 分支推送
+
+# 获取当前本地分支名
+local_branch=$(git rev-parse --abbrev-ref HEAD)
+
+# 规则 1: 禁止在 main 分支上工作
+if [ "$local_branch" = "main" ]; then
+    echo ""
+    echo "❌ ERROR: 不允许直接在 main 分支上推送代码。"
+    echo ""
+    echo "   正确工作流："
+    echo "   1. git checkout -b feat/your-feature-name"
+    echo "   2. 在 feat/* 分支上开发并提交"
+    echo "   3. git push origin feat/your-feature-name"
+    echo "   4. 在 GitHub 上手动创建 PR 合并到 main"
+    echo ""
+    exit 1
+fi
+
+# 规则 2: 分支名必须以 feat/ 开头
+if [[ ! "$local_branch" =~ ^feat/ ]]; then
+    echo ""
+    echo "❌ ERROR: 当前分支 '$local_branch' 不符合命名规范。"
+    echo ""
+    echo "   所有开发分支必须以 'feat/' 开头，例如："
+    echo "   • feat/pipeline-api"
+    echo "   • feat/auth-module"
+    echo "   • feat/fix-login-bug"
+    echo ""
+    echo "   请执行：git checkout -b feat/你的分支名"
+    echo ""
+    exit 1
+fi
+
+# 规则 3: 阻止向远程 main 推送（即使本地是非 main 分支）
+# 读取 push 的目标引用
+while read local_ref local_sha remote_ref remote_sha
+do
+    if [ "$remote_ref" = "refs/heads/main" ]; then
+        echo ""
+        echo "❌ ERROR: 禁止直接推送 (push) 到远程 main 分支。"
+        echo ""
+        echo "   正确工作流："
+        echo "   1. 确保你在 feat/* 分支上: git checkout feat/your-branch"
+        echo "   2. 推送到远程同名分支: git push origin feat/your-branch"
+        echo "   3. 在 GitHub 网页上创建 Pull Request"
+        echo "   4. 由仓库管理员手动 Review 并合并到 main"
+        echo ""
+        exit 1
+    fi
+done
+
+echo "✅ 分支检查通过: $local_branch"
+exit 0

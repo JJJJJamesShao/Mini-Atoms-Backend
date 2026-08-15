@@ -1,0 +1,20 @@
+#!/bin/bash
+# pre-commit hook: 阻止在 main 分支上直接提交
+
+local_branch=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$local_branch" = "main" ]; then
+    echo ""
+    echo "❌ ERROR: 不允许直接在 main 分支上提交代码。"
+    echo ""
+    echo "   正确工作流："
+    echo "   1. git checkout -b feat/your-feature-name"
+    echo "   2. 开发并提交代码"
+    echo "   3. git push origin feat/your-feature-name"
+    echo "   4. 在 GitHub 上创建 PR 合并"
+    echo ""
+    exit 1
+fi
+
+echo "✅ 分支检查通过: $local_branch"
+exit 0
