@@ -128,16 +128,20 @@ export class CodeSummarizer {
 }
 
 /** 默认摘要实现：快模型一句话总结代码片段在做什么（流式 + 短超时） */
-async function defaultSummarize(snippet: string): Promise<string> {
+async function defaultSummarize(snippet: string, signal?: AbortSignal): Promise<string> {
   const text = await collectStreamText(
-    await streamChat(MODEL_ROUTING.clarify, [
-      {
-        role: 'system',
-        content:
-          '你是一位代码分析助手。请用一句话（不超过 20 个字）总结这段代码正在实现什么功能。只输出总结，不要解释。',
-      },
-      { role: 'user', content: `代码片段：\n${snippet}` },
-    ]),
+    await streamChat(
+      MODEL_ROUTING.clarify,
+      [
+        {
+          role: 'system',
+          content:
+            '你是一位代码分析助手。请用一句话（不超过 20 个字）总结这段代码正在实现什么功能。只输出总结，不要解释。',
+        },
+        { role: 'user', content: `代码片段：\n${snippet}` },
+      ],
+      { signal },
+    ),
     SUMMARY_STREAM_TIMEOUTS,
   );
   return text.trim();
@@ -157,7 +161,12 @@ async function defaultSummarize(snippet: string): Promise<string> {
 async function collectStreamWithProgress(
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
   bus?: AgentEventBus,
-  options?: { onFirstChunk?: () => void; throwOnLength?: boolean },
+  options?: {
+    onFirstChunk?: () => void;
+    throwOnLength?: boolean;
+    /** 用户停止信号：透传给异步摘要器，停止后不再发起新摘要调用 */
+    signal?: AbortSignal;
+  },
 ): Promise<{ content: string; charCount: number; estimatedTokens: number }> {
   // 每 200 字符 emit 一次进度（节流公共函数）
   const emitProgress = throttleByChars(200, (acc) => {
@@ -215,7 +224,7 @@ async function collectStreamWithProgress(
     },
   ];
   const emittedSections = new Set<string>();
-  const summarizer = new CodeSummarizer();
+  const summarizer = new CodeSummarizer((snippet) => defaultSummarize(snippet, options?.signal));
 
   const content = await collectStreamText(
     stream,
@@ -368,6 +377,7 @@ async function runGLMPhase(
       ? await collectStreamWithProgress(stream, bus, {
           onFirstChunk: disarm,
           throwOnLength: opts.strictLength,
+          signal: opts.signal,
         })
       : await collectLight(stream, disarm);
     disarm();
@@ -397,6 +407,7 @@ async function runGLMPhase(
     return opts.richProgress
       ? collectStreamWithProgress(stream, bus, {
           throwOnLength: opts.strictLength,
+          signal: opts.signal,
         })
       : collectLight(stream);
   }
