@@ -11,7 +11,8 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "repository": {
     "type": "git",
