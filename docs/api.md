@@ -7,7 +7,9 @@
 
 - **Base URL**：开发 `http://localhost:3000`；生产 `https://<你的域名>`（路径不变，无 `/v1` 前缀）
 - **认证**：除标注「公开」的接口外，均需请求头 `Authorization: Bearer <token>`（JWT，有效期 30 天，由注册/登录接口签发）
-- **数据风格**：请求/响应 JSON 均为 `snake_case` 字段
+- **数据风格**（两套并存，按场景区分）：
+  - REST 资源响应（projects / versions / users，数据库映射）：`snake_case`
+  - Pipeline 请求体与 SSE 事件（沿袭 mini-atoms 前端协议）：`camelCase`，如 `projectId`、`currentFiles`、`baseVersionNo`、`versionNo`、`finalState`
 - **错误格式**：非 2xx 响应统一为 `{ "error": "<机器可读码>", "message": "<用户可读中文文案>", ...附加字段 }`
 - **CORS**：当前开发态全放开；生产将收紧为前端域名白名单（部署时配置）
 
