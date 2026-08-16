@@ -11,6 +11,7 @@
 - draft 是自由文本入口，与 pipeline 一致走关键词层审核
 - 迁移已手动应用到 dev 库（drizzle-kit migrate 挂起是仓库已知问题），journal 已补
 - 任务包原稿与仓库的偏差（有意为之）：复用现有 BAILIAN 快模型而非新建 LIGHTWEIGHT_LLM_API_KEY fetch 封装；schema 在 src/models/schema.ts 且 user_id 保持 nullable（演示数据约定）
+- 已修复并需复核的上轮 blocking：①draft 额度（free 10 次/2h，action='draft' 独立计数，鉴权+审核之后、创建之前）；②deploy 已不含自动迁移步骤，README 明确了「含 schema 变更的 PR 必须先手动应用迁移再合并」的运维约定（drizzle-kit migrate 挂起为已知问题）
 
 ## 输出要求
 - **只报告 blocking 级别问题**（正确性、安全、协议不兼容、资源泄漏）
