@@ -632,6 +632,19 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
       const { project_id, approved, feedback, modifications } = parsed.data;
       const userId = request.user.sub;
 
+      // feedback 会拼进 spec prompt 重生规格：与其他自由文本入口一致过关键词审核
+      if (feedback) {
+        const mod = checkInput(feedback);
+        if (mod.blocked) {
+          return reply.code(400).send({
+            error: 'CONTENT_BLOCKED',
+            message: mod.message,
+            category: mod.category,
+            detail: '根据相关法律法规，部分敏感内容无法处理。',
+          });
+        }
+      }
+
       const pendingProject = pendingProjectOf(userId);
       if (pendingProject === undefined) {
         return reply.code(400).send({
