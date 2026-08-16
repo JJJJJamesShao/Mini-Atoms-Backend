@@ -19,9 +19,16 @@ jobs:
           port: 22
           script_stop: true
           script: |
+            set -e
             cd /root/proj/Mini-Atoms-Backend
+            echo "Pulling latest code..."
             git pull origin main
+            echo "Installing dependencies..."
             npm install
+            echo "Building..."
             npm run build
+            echo "Running migrations..."
             npm run db:migrate
+            echo "Restarting service..."
             pm2 restart mini-atoms || pm2 start dist/index.js --name mini-atoms
+            echo "Deploy complete!"
