@@ -22,4 +22,5 @@ jobs:
             git pull origin main
             npm install
             npm run build
+            npm run db:migrate
             pm2 restart mini-atoms || pm2 start dist/index.js --name mini-atoms
