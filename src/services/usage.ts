@@ -2,7 +2,7 @@ import { and, count, eq, gte } from 'drizzle-orm';
 import { getDb } from '../config/database.js';
 import { usage } from '../models/schema.js';
 
-export type UsageAction = 'generate';
+export type UsageAction = 'generate' | 'draft';
 
 /** 记录一次 LLM 生成用量（限流与审计依据） */
 export async function logUsage(userId: string, action: UsageAction): Promise<void> {

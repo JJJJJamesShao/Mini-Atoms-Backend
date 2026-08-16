@@ -48,17 +48,29 @@ npm run lint       # eslint
 
 ## 部署（GitHub Actions）
 
-push 到 `main` 时，`.github/workflows/deploy.yml` 自动 SSH 到 ECS 执行：git pull → npm install → build → db:migrate → pm2 重启。
+push 到 `main` 时，`.github/workflows/deploy.yml` 自动 SSH 到 ECS 执行：git pull → npm install → build → pm2 重启。
 
 前置条件：
 
 - ECS：仓库克隆到 `/root/proj/Mini-Atoms-Backend`，已安装 node 与 pm2，`.env` 已就位
 - GitHub 仓库 Settings → Secrets → Actions 配置：`ECS_IP`、`ECS_USER`、`ECS_PASSWORD`
 
+**数据库迁移是部署前的手动步骤**（`drizzle-kit migrate` 在本环境挂起，属已知问题，deploy 流程中已移除该步骤）：合入含 schema 变更的 PR 前，先在 ECS 上应用对应迁移——
+
+```bash
+cd /root/proj/Mini-Atoms-Backend
+sudo -u postgres psql -d mini_atoms_dev -v ON_ERROR_STOP=1 -f drizzle/000X_xxx.sql
+# 补 journal（hash=迁移文件名，created_at=meta/_journal.json 里的 when）：
+sudo -u postgres psql -d mini_atoms_dev -c \
+  "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('000X_xxx', <when>);"
+```
+
+不迁移就部署会导致相关接口 500（缺列/缺表），务必先迁移后合并。
+
 手动运维命令：
 
 ```bash
-npm run db:migrate   # 应用数据库迁移（drizzle-kit migrate）
+npm run db:migrate   # drizzle-kit migrate（当前环境挂起，见上方手动流程）
 npm run user:promote -- <email>   # 将注册用户升级为付费用户
 ```
 

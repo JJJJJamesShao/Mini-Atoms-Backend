@@ -166,7 +166,7 @@
 ```
 
 - 标题先以输入截断占位，LLM 摘要完成后 `status` 变 `ready`（前端可轮询 `GET /api/projects` 或下次刷新时更新）；摘要失败静默降级为截断标题
-- 前置拦截：登录 `401`；关键词内容审核 `400 CONTENT_BLOCKED`
+- 前置拦截：登录 `401`；关键词内容审核 `400 CONTENT_BLOCKED`；草稿额度超限 `429 quota_exceeded`（free 10 次/2h，paid 不限，独立于 generate 额度）
 - 后续生成走 `POST /api/pipeline` 迭代模式（`input` + `projectId`，不传 `currentFiles`）：草稿 0 版本 → 创建版本 1，SSE 发 `project_updated`（非 `project_created`）；`GET /api/projects/:id` 在版本 1 落库前 `versions` 为空数组，前端需判空
 
 ### GET /api/projects/:id

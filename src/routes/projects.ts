@@ -13,7 +13,15 @@ import {
   togglePinProject,
 } from '../services/projects.js';
 import { getVersions } from '../services/versions.js';
-import { countUsers } from '../services/users.js';
+import { countUsers, getUserRole } from '../services/users.js';
+import { countUsageInWindow, logUsage } from '../services/usage.js';
+
+/**
+ * 草稿创建额度：滑动窗口 10 次 / 2 小时（独立于 pipeline 的 generate 额度，
+ * 避免「草稿 + 生成」双扣）。paid 不限。防脚本化刷草稿白嫖标题 LLM 调用。
+ */
+const DRAFT_FREE_WINDOW_MS = 2 * 60 * 60 * 1000;
+const DRAFT_FREE_LIMIT = 10;
 
 /** 项目 CRUD + 公开用户计数；全部鉴权（count 除外），写操作校验归属 */
 export async function projectRoutes(app: FastifyInstance): Promise<void> {
@@ -45,6 +53,21 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
         detail: '根据相关法律法规，部分敏感内容无法处理。',
       });
     }
+
+    // 草稿额度（标题摘要带 LLM 调用，必须有上限）
+    const role = await getUserRole(request.user.sub);
+    const used = await countUsageInWindow(request.user.sub, 'draft', DRAFT_FREE_WINDOW_MS);
+    if (role === 'free' && used >= DRAFT_FREE_LIMIT) {
+      return reply.code(429).send({
+        error: 'quota_exceeded',
+        role,
+        used,
+        quota: DRAFT_FREE_LIMIT,
+        windowSeconds: DRAFT_FREE_WINDOW_MS / 1000,
+        message: `草稿创建过于频繁：每 2 小时可创建 ${DRAFT_FREE_LIMIT} 次，请稍后再试`,
+      });
+    }
+    await logUsage(request.user.sub, 'draft');
 
     const fallbackTitle = input.slice(0, 30) + (input.length > 30 ? '...' : '');
     const project = await createDraftProject(
