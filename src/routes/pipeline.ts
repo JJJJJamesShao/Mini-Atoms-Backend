@@ -11,7 +11,7 @@ import { checkInput } from '../lib/moderation.js';
 import { filterByLLM } from '../lib/llm-content-filter.js';
 import { INSTANCE_ID } from '../lib/observability.js';
 import { authenticate } from '../middleware/authenticate.js';
-import { createProject, getProject } from '../services/projects.js';
+import { createProject, getProject, setConfirmedSpec } from '../services/projects.js';
 import {
   createVersion,
   getVersions,
@@ -23,6 +23,13 @@ import { createMessage } from '../services/messages.js';
 import { countUsageInWindow, logUsage } from '../services/usage.js';
 import { getUserRole, type UserRole } from '../services/users.js';
 import { registerRun, unregisterRun, getRun } from '../services/runs.js';
+import {
+  waitForApproval,
+  resolveApproval,
+  pendingProjectOf,
+} from '../services/pending-approvals.js';
+import { writeLimit } from '../lib/rate-limits.js';
+import type { Approver } from '../lib/agent/index.js';
 import { loadEnv } from '../config/env.js';
 
 /**
@@ -300,6 +307,8 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
       // 落库幂等防护：persistRun 之后的 send 在断流时抛错会落入外层 catch，
       // 若无防护会对同一运行二次落库（重复项目/版本/消息）
       let persistAttempted = false;
+      /** 用户确认后的规格存证（approve 门通过后落库到 projects.confirmed_spec） */
+      let capturedConfirmation: Record<string, unknown> | null = null;
 
       /**
        * 落库一次运行（done/fail/error 三路径共用）。成功与失败都写版本行——
@@ -343,6 +352,7 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
           await createVersion(projectId, opts.files, nextVersionNo, process);
           await createMessage(projectId, 'user', input);
           await createMessage(projectId, 'assistant', opts.assistantText);
+          if (capturedConfirmation) await setConfirmedSpec(projectId, capturedConfirmation);
           notify({
             type: 'project_updated',
             projectId,
@@ -355,6 +365,7 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
         await createVersion(project.id, opts.files, 1, process);
         await createMessage(project.id, 'user', input);
         await createMessage(project.id, 'assistant', opts.assistantText);
+        if (capturedConfirmation) await setConfirmedSpec(project.id, capturedConfirmation);
         notify({
           type: 'project_created',
           projectId: project.id,
@@ -393,10 +404,62 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
         // lambda 时内存 resolver 不可见。Fastify 单进程本可恢复挂起门，
         // 但自动确认的体验已被接受；用户可通过对话迭代直接修改产物。
         const sessionId = crypto.randomUUID();
-        const approver = async (spec: SpecOutput) => {
+        // 规格确认门：默认挂起等待用户确认（POST /api/pipeline/approve 落锤），
+        // 超时/中止自动收敛；PIPELINE_AUTO_APPROVE=true 或 MOCK_LLM=1 时恢复
+        // 旧的自动确认行为。根因备注（mini-atoms serverless 时代多实例内存不可见）
+        // 在 Fastify 单进程下不成立，确认门恢复为真实挂起。
+        const env = loadEnv();
+        const autoApprove = env.PIPELINE_AUTO_APPROVE === 'true' || env.MOCK_LLM === '1';
+        const approver: Approver = async (spec, clarify) => {
           capturedSpec = spec; // 落库用：记录规格
-          request.log.info({ sessionId, instance: INSTANCE_ID }, 'approve 自动确认（跳过确认门）');
-          return true;
+          if (autoApprove) {
+            request.log.info(
+              { sessionId, instance: INSTANCE_ID },
+              'approve 自动确认（PIPELINE_AUTO_APPROVE/MOCK_LLM）',
+            );
+            return { approved: true };
+          }
+          // 用户友好规格取 clarify 产物（本身就是给人看的），技术规格原文放 raw 折叠
+          try {
+            send({
+              type: 'spec_ready',
+              spec: {
+                summary: clarify?.summary ?? '',
+                requirements: clarify?.requirements ?? [],
+                openQuestions: clarify?.openQuestions ?? [],
+                raw: spec,
+              },
+            });
+          } catch {
+            // 流已断开：abort 监听会兜底解除挂起
+          }
+          request.log.info({ sessionId, userId }, 'approve 挂起等待用户确认');
+          const decision = await waitForApproval(
+            userId,
+            projectId ?? null,
+            env.PIPELINE_APPROVE_TIMEOUT_MS,
+            runController.signal,
+          );
+          // 中止触发的解除挂起：抛错走 catch 的"手动停止"落库路径，
+          // 而不是被当成用户拒绝（spec_rejected）
+          if (runController.signal.aborted) throw new Error('用户手动停止生成');
+          if (decision.approved) {
+            capturedConfirmation = {
+              summary: clarify?.summary ?? '',
+              requirements: clarify?.requirements ?? [],
+              openQuestions: clarify?.openQuestions ?? [],
+              raw: spec,
+              modifications: decision.modifications ?? null,
+              autoApproved: decision.auto ?? false,
+            };
+            request.log.info({ sessionId, userId, auto: decision.auto ?? false }, '规格已确认');
+          } else {
+            request.log.info(
+              { sessionId, userId, hasFeedback: Boolean(decision.feedback) },
+              '规格被拒绝',
+            );
+          }
+          return decision;
         };
 
         // 前端按 sop.steps 动态生成阶段卡片（fix/ fail 为内部步骤，不下发；
@@ -541,6 +604,50 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
         unregisterRun(userId, runController);
         reply.raw.end();
       }
+    },
+  );
+
+  /**
+   * POST /api/pipeline/approve — 规格确认门回调。
+   * Pipeline 运行到 approve 步骤时挂起（SSE 推 spec_ready 事件），本接口落锤：
+   * - approved:true（可带 modifications 存证）→ 恢复执行进入生成
+   * - approved:false + feedback → 带反馈重生规格并再次推送 spec_ready（上限见引擎）
+   * 挂起按用户维度（runs 注册表同构：同用户同时只有一条活跃运行）。
+   */
+  app.post(
+    '/api/pipeline/approve',
+    { preHandler: [authenticate], config: { rateLimit: writeLimit() } },
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          project_id: z.string().optional(),
+          approved: z.boolean(),
+          feedback: z.string().max(2000).optional(),
+          modifications: z.record(z.string(), z.unknown()).optional(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'invalid_input', message: '缺少 approved 字段' });
+      }
+      const { project_id, approved, feedback, modifications } = parsed.data;
+      const userId = request.user.sub;
+
+      const pendingProject = pendingProjectOf(userId);
+      if (pendingProject === undefined) {
+        return reply.code(400).send({
+          error: 'not_awaiting_approval',
+          message: '当前没有等待确认的规格（已确认或已结束）',
+        });
+      }
+      if (project_id && pendingProject && project_id !== pendingProject) {
+        return reply
+          .code(404)
+          .send({ error: 'project_not_found', message: '项目与等待中的运行不匹配' });
+      }
+
+      resolveApproval(userId, { approved, feedback, modifications });
+      request.log.info({ userId, approved }, '规格确认门收到用户决策');
+      return { success: true };
     },
   );
 

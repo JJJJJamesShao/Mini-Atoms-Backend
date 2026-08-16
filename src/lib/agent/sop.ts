@@ -82,7 +82,11 @@ export const DEFAULT_SOP: SOPConfig = {
       action: 'approve',
       next: {
         default: 'generate',
-        conditions: [{ field: 'approved', operator: 'eq', value: 'false', then: 'fail' }],
+        conditions: [
+          // 拒绝 + 反馈 → 回 spec 重生（引擎内有次数上限）；纯拒绝/用尽 → fail
+          { field: 'decision', operator: 'eq', value: 'retry', then: 'spec' },
+          { field: 'decision', operator: 'eq', value: 'rejected', then: 'fail' },
+        ],
       },
     },
     { name: 'generate', role: 'engineer', action: 'generate', next: 'verify' },
@@ -196,7 +200,11 @@ export const FULLSTACK_SOP: SOPConfig = {
       action: 'approve',
       next: {
         default: 'generate-schema',
-        conditions: [{ field: 'approved', operator: 'eq', value: 'false', then: 'fail' }],
+        conditions: [
+          // 拒绝 + 反馈 → 回 spec 重生（引擎内有次数上限）；纯拒绝/用尽 → fail
+          { field: 'decision', operator: 'eq', value: 'retry', then: 'spec' },
+          { field: 'decision', operator: 'eq', value: 'rejected', then: 'fail' },
+        ],
       },
     },
     {

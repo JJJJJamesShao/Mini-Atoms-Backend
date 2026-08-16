@@ -43,7 +43,7 @@ describe('Heavy Load', () => {
           `做一个计算器 ${i}`,
           DEFAULT_SOP,
           makeExecutors(),
-          async () => true,
+          async () => ({ approved: true }),
           new AgentEventBus(),
         ),
       ),
@@ -70,7 +70,7 @@ describe('Heavy Load', () => {
         '做一个待办清单',
         DEFAULT_SOP,
         makeExecutors(),
-        async () => true,
+        async () => ({ approved: true }),
         new AgentEventBus(),
       );
     }

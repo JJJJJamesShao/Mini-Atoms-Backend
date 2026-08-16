@@ -56,6 +56,12 @@ export const projects = pgTable('projects', {
     .default('ready'),
   // 首条输入前 100 字，列表预览用（draft 接口写入，其余入口为 null）
   inputPreview: text('input_preview'),
+  // 规格确认门：用户确认后的规格（友好字段 + raw 技术规格 + modifications）；
+  // spec_status：auto=未经确认门（旧行为/自动确认），confirmed=用户确认过
+  confirmedSpec: jsonb('confirmed_spec').$type<Record<string, unknown> | null>(),
+  specStatus: text('spec_status', { enum: ['auto', 'awaiting', 'confirmed'] })
+    .notNull()
+    .default('auto'),
   pinned: boolean('pinned').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

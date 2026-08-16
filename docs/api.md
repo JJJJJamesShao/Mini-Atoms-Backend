@@ -100,6 +100,7 @@ access token 过期后的静默刷新。前端应在收到带 `Token-Expired: tr
 |---|---|---|
 | `start` | `input`, `sop: { id, name, steps: string[] }` | 流水线启动；`steps` 为本次 SOP 的阶段列表（前端据此渲染阶段卡片）。`sop.id` ∈ `web-app` / `game` / `fullstack-app` / `modify` |
 | `agent_event` | `payload: AgentEvent` | Agent 实时事件，结构见 §3.2 |
+| `spec_ready` | `spec`（见下） | **规格确认门**：approve 阶段挂起等待用户确认时推送；SSE 不断开，前端展示确认面板后调 `POST /api/pipeline/approve`（§3.5）。`PIPELINE_AUTO_APPROVE=true` 时不出现 |
 | `heartbeat` | `timestamp` | 保活：静默 ≥15s 时发送，15s 一跳。建议前端做 45s 无数据看门狗 |
 | `project_created` | `projectId`, `versionNo` | 首版落库完成（P0：前端据此刷新项目列表） |
 | `project_updated` | `projectId`, `versionNo` | 迭代新版本落库完成（同上） |
@@ -126,6 +127,19 @@ access token 过期后的静默刷新。前端应在收到带 `Token-Expired: tr
 ```
 
 `finalState: "fail"` 时 `result` 为 `null`；`reason: "need_clarification"` 是**软着陆**（不是失败，前端应引导用户补充信息后继续）。
+
+`spec_ready` 事件的 `spec` 结构（用户友好规格 + 技术规格原文）：
+
+```json
+{
+  "summary": "一句话需求总结（clarify 产物）",
+  "requirements": ["用户可读的需求条目"],
+  "openQuestions": ["可选：待澄清问题"],
+  "raw": { "requirements": [], "constraints": [], "userStories": [] }
+}
+```
+
+`raw` 为技术规格（SpecOutput），前端折叠展示。等待期间超时（默认 5 分钟，`PIPELINE_APPROVE_TIMEOUT_MS` 可调）未确认将**自动通过**继续生成；用户断开连接则整条流水线按「手动停止」收尾。
 
 ### 3.2 AgentEvent（agent_event 的 payload）
 
@@ -169,6 +183,23 @@ access token 过期后的静默刷新。前端应在收到带 `Token-Expired: tr
 ```
 
 **前端正确做法**：点击停止时①本地中断 SSE 读取（AbortController）②再调用本接口（404 不视为错误）。直接关闭页面/断网也会触发服务端自动取消（断流检测）。
+
+### 3.5 POST /api/pipeline/approve — 规格确认
+
+对挂起中的 approve 门落锤（收到 `spec_ready` 事件后调用）：
+
+```json
+// 请求（project_id 可选，草稿流程下建议带上做匹配校验）
+{ "project_id": "<uuid>", "approved": true,  "modifications": { "任意": "存证字段" } }
+// 或拒绝并重生：
+{ "approved": false, "feedback": "我不想做博客，想要摄影作品展示页" }
+```
+
+- `approved: true` → 流水线恢复进入代码生成；`modifications` 与规格一起存入 `projects.confirmed_spec`（**仅存证，不影响生成**——要改内容走拒绝路径）
+- `approved: false` + `feedback` → 带反馈重生规格，再次推送 `spec_ready`（最多重生 2 次，第 3 次拒绝直接 `fail: spec_rejected`）
+- `approved: false` 且无 feedback → 直接 `fail: spec_rejected`
+
+响应：`200 { "success": true }`｜`400 invalid_input`｜`400 not_awaiting_approval`（无挂起中的确认）｜`404 project_not_found`（project_id 与挂起运行不匹配）
 
 ## 4. 项目
 

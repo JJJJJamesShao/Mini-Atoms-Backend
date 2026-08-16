@@ -50,6 +50,17 @@ export async function finalizeDraftTitle(id: string, title: string): Promise<voi
   await getDb().update(projects).set({ title, status: 'ready' }).where(eq(projects.id, id));
 }
 
+/** 规格确认门落库：写入用户确认的规格并标记 confirmed（approve 决策的存证） */
+export async function setConfirmedSpec(
+  id: string,
+  confirmedSpec: Record<string, unknown>,
+): Promise<void> {
+  await getDb()
+    .update(projects)
+    .set({ confirmedSpec, specStatus: 'confirmed' })
+    .where(eq(projects.id, id));
+}
+
 /** 按用户查询项目；user_id 为 null 的视为历史演示数据，对所有登录用户可见 */
 export async function getProjectsForUser(userId: string): Promise<ProjectRow[]> {
   const rows = await getDb()

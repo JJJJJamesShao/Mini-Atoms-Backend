@@ -27,7 +27,7 @@ export interface PipelineEvent {
 /** 可注入的节点执行器——默认实现使用罐头数据，替换为真实 LLM 调用时只需提供新实现 */
 export interface Executors {
   clarify: (input: string) => Promise<ClarifyOutput>;
-  spec: (clarify: ClarifyOutput) => Promise<SpecOutput>;
+  spec: (clarify: ClarifyOutput, feedback?: string) => Promise<SpecOutput>;
   /**
    * 生成代码。
    * @param spec - 规格
@@ -69,5 +69,18 @@ export interface Executors {
   ) => Promise<PatchOutput>;
 }
 
-/** approve 节点决策（骨架阶段由调用方注入，默认自动通过） */
-export type Approver = (spec: SpecOutput) => Promise<boolean>;
+/**
+ * approve 节点决策（由调用方注入；不注入则自动通过）。
+ * approved:false + feedback → 引擎带反馈重跑 spec 步骤（有次数上限）；
+ * modifications 仅落库存证，不影响生成（产品决策，见 pipeline 路由）。
+ */
+export interface ApproveDecision {
+  approved: boolean;
+  feedback?: string;
+  modifications?: Record<string, unknown>;
+}
+
+export type Approver = (
+  spec: SpecOutput,
+  clarify: ClarifyOutput | null,
+) => Promise<ApproveDecision>;
