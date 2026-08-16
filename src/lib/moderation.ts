@@ -86,8 +86,7 @@ const OBFUSCATION_MAP: Record<string, string> = {
 };
 
 /** 分隔符：折叠文本中删除，防"色 情""p.o.r.n"式拆字绕过 */
-const SEPARATOR_RE = /[\s·•.\-_*\/\\|,，'"。~^·]+/g;
-
+const SEPARATOR_RE = /[\s·•.\-_*/\\|,，'"。~^·]+/g;
 function normalizeText(text: string): string {
   let normalized = text.toLowerCase();
   // 去掉变音符号

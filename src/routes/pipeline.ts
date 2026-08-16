@@ -37,7 +37,8 @@ const QUOTA: Record<UserRole, number> = {
 };
 
 const bodySchema = z.object({
-  input: z.string().min(1),
+  // 上限防超长 prompt 刷 token（额度是按次数计的，长度不受控会被单次烧穿）
+  input: z.string().min(1).max(loadEnv().MAX_INPUT_LENGTH),
   projectId: z.string().optional(),
   currentFiles: z.array(z.object({ path: z.string(), content: z.string() })).optional(),
   /** 分叉基准：本次基于哪个 version_no 的代码修改（首版缺省） */
@@ -133,9 +134,7 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const parsed = bodySchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply
-          .code(400)
-          .send({ error: 'invalid_input', message: '缺少 input 字段' });
+        return reply.code(400).send({ error: 'invalid_input', message: '缺少 input 字段' });
       }
       const { input, projectId, currentFiles, baseVersionNo } = parsed.data;
       const userId = request.user.sub;

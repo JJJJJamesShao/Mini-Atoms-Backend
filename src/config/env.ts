@@ -39,6 +39,21 @@ const envSchema = z.object({
   // 关键词层通过后才触发。置信度超过阈值才拦截（默认 0.7，减少误杀）
   LLM_FILTER_ENABLED: z.string().optional(),
   LLM_FILTER_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
+
+  // 限流（@fastify/rate-limit）：认证接口每 IP 每小时 10 次；开发环境统一放宽 10 倍
+  RATE_LIMIT_AUTH_MAX: z.coerce.number().int().positive().default(10),
+  RATE_LIMIT_AUTH_WINDOW_MS: z.coerce.number().int().positive().default(3_600_000),
+
+  // CORS：逗号分隔的允许来源。生产缺省 = 仅同源（禁止跨域）；开发缺省 = 常见本地端口
+  CORS_ORIGINS: z.string().optional(),
+
+  // JWT：access 2h + refresh 7d（/api/auth/refresh 换新 access；登出进黑名单）
+  JWT_ACCESS_EXPIRY: z.string().default('2h'),
+  JWT_REFRESH_EXPIRY: z.string().default('7d'),
+
+  // 请求防护：请求体上限 + pipeline 输入最大长度
+  MAX_BODY_SIZE: z.coerce.number().int().positive().default(1_048_576),
+  MAX_INPUT_LENGTH: z.coerce.number().int().positive().default(4_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

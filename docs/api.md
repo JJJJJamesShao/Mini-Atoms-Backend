@@ -6,41 +6,67 @@
 ## 1. 通用约定
 
 - **Base URL**：开发 `http://localhost:3000`；生产 `https://<你的域名>`（路径不变，无 `/v1` 前缀）
-- **认证**：除标注「公开」的接口外，均需请求头 `Authorization: Bearer <token>`（JWT，有效期 30 天，由注册/登录接口签发）
+- **认证**：除标注「公开」的接口外，均需请求头 `Authorization: Bearer <token>`（JWT access token，有效期 **2 小时**，由注册/登录接口签发；过期后走 §2 的 refresh 流程）
 - **数据风格**（两套并存，按场景区分）：
   - REST 资源响应（projects / versions / users，数据库映射）：`snake_case`
   - Pipeline 请求体与 SSE 事件（沿袭 mini-atoms 前端协议）：`camelCase`，如 `projectId`、`currentFiles`、`baseVersionNo`、`versionNo`、`finalState`
 - **错误格式**：非 2xx 响应统一为 `{ "error": "<机器可读码>", "message": "<用户可读中文文案>", ...附加字段 }`
-- **CORS**：当前开发态全放开；生产将收紧为前端域名白名单（部署时配置）
+- **CORS**：生产仅允许 `CORS_ORIGINS` 配置的域名（缺省禁跨域）；开发允许 localhost 常见端口。预检缓存 24h
+- **限流**：分层限流（@fastify/rate-limit，内存实现）。超限统一 `429`：`{ "error": "rate_limited", "message": "请求过于频繁，请 N 秒后再试", "retryAfterSeconds": N }`——注意与额度超限的 `429 quota_exceeded`（§3.3）区分。分层：认证接口 10 次/小时/IP；项目读 30 次/分钟；项目写 10 次/分钟；全局兜底 60 次/分钟；`/health` 不限。Pipeline 不额外限流（额度制已覆盖成本）。开发环境自动放宽 10 倍
+- **请求体上限**：1MB，超限 `413 { "message": "请求体过大，请缩短内容后重试" }`；`input` 字段最长 4000 字符，超限 `400 invalid_input`
 
 ## 2. 认证
 
 ### POST /api/auth/register（公开）
 
-注册并直接签发 JWT。新用户默认 `free` 角色（额度见 §3.3）。
+注册并直接签发双令牌。新用户默认 `free` 角色（额度见 §3.3）。
 
 ```json
 // 请求
 { "email": "user@example.com", "password": "至少8位，最长72位" }
 // 201 响应
-{ "token": "<jwt>", "user": { "id": "<uuid>", "email": "user@example.com", "role": "free" } }
+{ "token": "<access jwt, 2h>", "refreshToken": "<refresh jwt, 7d>", "user": { "id": "<uuid>", "email": "user@example.com", "role": "free" } }
 ```
 
-错误：`400 invalid_input`（格式不符）｜`409 email_exists`
+错误：`400 invalid_input`（格式不符）｜`409 email_exists`｜`429 rate_limited`
 
 ### POST /api/auth/login（公开）
 
 ```json
 // 请求
 { "email": "user@example.com", "password": "..." }
-// 200 响应：同 register
+// 200 响应：同 register（含 refreshToken）
 ```
 
-错误：`400 invalid_input`｜`401 invalid_credentials`（文案不区分邮箱/密码，防枚举）
+错误：`400 invalid_input`｜`401 invalid_credentials`（文案不区分邮箱/密码，防枚举）｜`429 rate_limited`
 
 ### GET /api/auth/me
 
 恢复会话用。响应：`{ "user": { "id", "email", "role" } }`；`401 unauthorized`
+
+### POST /api/auth/refresh（公开，限流同认证接口）
+
+access token 过期后的静默刷新。前端应在收到带 `Token-Expired: true` 响应头的 401（`error: "token_expired"`）时自动调用。
+
+```json
+// 请求
+{ "refreshToken": "<refresh jwt>" }
+// 200 响应
+{ "token": "<新 access jwt, 2h>", "user": { "id", "email", "role" } }
+```
+
+错误：`400 invalid_input`｜`401 token_expired`（refresh 无效/过期，需重新登录）
+
+### POST /api/auth/logout
+
+登出：当前 access token 与（可选）refreshToken 加入黑名单，立即失效。黑名单为内存实现，进程重启清空（风险窗口 ≤ access 的 2h 有效期）。
+
+```json
+// 请求头带 access token；请求体可选
+{ "refreshToken": "<refresh jwt>" }
+// 200
+{ "success": true }
+```
 
 ## 3. Pipeline（核心）
 
@@ -225,5 +251,5 @@
 3. **项目列表刷新**：收到 `project_created`/`project_updated` 后重新拉取 `GET /api/projects`，无需手动刷新页面
 4. **停止生成**：见 §3.4——本地断流优先，abort 接口兜底
 5. **错误展示**：优先展示 `message` 字段（用户可读中文），`error` 码用于分支逻辑（如 `CONTENT_BLOCKED` 不进重试）
-6. **JWT 存储**：`localStorage` 即可（内测期），30 天过期后回登录页
+6. **JWT 存储与刷新**：access（2h）与 refresh（7d）都存 `localStorage`（内测期）；收到带 `Token-Expired: true` 头的 401 时调 `/api/auth/refresh` 静默换新 access，refresh 也失效才回登录页；登出调 `/api/auth/logout` 使旧 token 立即失效
 7. **版本回放**：`versions[].stages` + `versions[].logs` 可完整重建一次运行的过程视图，无需额外接口
