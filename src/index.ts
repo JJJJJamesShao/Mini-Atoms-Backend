@@ -40,8 +40,8 @@ async function main() {
 
   // 限流：全局兜底 60 次/分钟；认证等敏感路由在各路由内覆盖。
   // keyGenerator 说明：onRequest 钩子在 authenticate 之前执行，request.user
-  // 尚未填充，故 decode（不验签）取 sub 做已登录限流键——伪造 sub 最多绕过
-  // 每用户维度，IP 维度与计费额度（DB 层）仍在，可接受。
+  // 尚未填充，故直接验签（app.jwt.verify 同步）取 sub，与 IP 组成复合键——
+  // 伪造/过期 token 验签失败回退纯 IP 键，保证认证接口的 IP 限流不可绕过。
   const relax = isProd ? 1 : 10; // 开发环境放宽 10 倍
   await app.register(rateLimit, {
     max: 60 * relax,
@@ -50,8 +50,15 @@ async function main() {
     allowList: (req) => req.url === '/health',
     keyGenerator: (req) => {
       const raw = req.headers.authorization?.slice(7) ?? '';
-      const payload = raw ? app.jwt.decode<{ sub?: string }>(raw) : null;
-      return payload?.sub ?? req.ip;
+      if (raw) {
+        try {
+          const payload = app.jwt.verify<{ sub?: string }>(raw);
+          if (payload.sub) return `${req.ip}:${payload.sub}`;
+        } catch {
+          // 伪造/过期 token：回退纯 IP 键
+        }
+      }
+      return req.ip;
     },
     errorResponseBuilder: (req, context) => ({
       // 插件把返回值当 error 对象发送：必须自带 statusCode，否则响应变 500

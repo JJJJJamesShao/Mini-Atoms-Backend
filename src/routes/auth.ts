@@ -132,15 +132,23 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   /** 登出：当前 access token（及可选 refreshToken）加入黑名单，立即失效 */
   app.post('/api/auth/logout', { preHandler: [authenticate] }, async (request) => {
+    // 黑名单 TTL 从 token 自身 exp 派生（随 JWT_*_EXPIRY 配置自适应）；
+    // 先验签再入名单：伪造/超长字符串直接丢弃，防内存注入
+    const blacklistJwt = (token: string) => {
+      try {
+        const payload = app.jwt.verify<{ exp?: number }>(token);
+        blacklistToken(token, (payload.exp ?? 0) * 1000);
+      } catch {
+        // 非法或已过期的 token 无需进黑名单
+      }
+    };
     const raw = rawTokenOf(request.headers.authorization);
-    if (raw) {
-      // 黑名单时长取 access 有效期（2h），之后条目自然过期清理
-      blacklistToken(raw, Date.now() + 2 * 60 * 60 * 1000);
-    }
-    const body = z.object({ refreshToken: z.string().optional() }).safeParse(request.body ?? {});
-    if (body.success && body.data.refreshToken) {
-      blacklistToken(body.data.refreshToken, Date.now() + 7 * 24 * 60 * 60 * 1000);
-    }
+    if (raw) blacklistJwt(raw);
+    // 真实 refresh JWT 约 300 字符，2048 上限防黑名单内存注入
+    const body = z
+      .object({ refreshToken: z.string().max(2048).optional() })
+      .safeParse(request.body ?? {});
+    if (body.success && body.data.refreshToken) blacklistJwt(body.data.refreshToken);
     request.log.info({ userId: request.user.sub }, '用户登出');
     return { success: true };
   });
