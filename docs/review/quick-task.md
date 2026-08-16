@@ -1,14 +1,14 @@
-# L2 快速评审任务：Pipeline 核心移植（已合入 main）
+# L2 快速评审任务：GitHub Actions 部署 workflow
 
 ## 评审范围
-- diff：`git diff ded6b46..3ab6769`（feat/pipeline-core-migration 合入，3 个 commit：aa36984 移植主体、a3a7b0b、ebe336b）
-- 除 diff 外，允许查看变更文件的**直接关联上下文**（调用方/被引用方/相关类型定义），不评审未变更的无关文件
+- diff：`git diff main...HEAD`（feat/ci-deploy，新增 `.github/workflows/deploy.yml`，及本任务文件自身更新）
+- 除 diff 外，允许查看变更文件的**直接关联上下文**，不评审未变更的无关文件
 
 ## 背景
-- 本仓库是 Fastify 5 + Drizzle + PostgreSQL 后端，代码从 mini-atoms（Next.js）移植
-- SSE 事件协议必须与前端（mini-atoms useWorkspace）逐字段兼容
-- P1 停止功能依赖 AbortSignal 从路由穿线到所有 LLM 调用点，遗漏任一点会导致停止后继续烧 token
-- 额度为滑动窗口（usage 表 created_at 窗口计数），JWT + scrypt 自建认证
+- 本仓库是 Fastify 5 + Drizzle + PostgreSQL 后端，部署目标是阿里云 ECS（Ubuntu 22.04）
+- workflow 用 appleboy/ssh-action 以密码登录 ECS 执行 git pull + build + pm2 重启
+- 已知且**有意为之**的前置缺口（不算 finding）：ECS 上 `/opt/mini-atoms` 仓库、node、pm2 尚未就绪；GitHub repo secrets（ECS_IP/ECS_USER/ECS_PASSWORD）尚未配置——workflow 合入后首次触发会失败，属预期
+- 仓库分支保护：禁止直推 main，workflow 仅在 main 收到 push（即 PR 合入）时触发
 
 ## 输出要求
 - **只报告 blocking 级别问题**（正确性、安全、协议不兼容、资源泄漏）
