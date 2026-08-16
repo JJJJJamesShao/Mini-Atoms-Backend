@@ -1,7 +1,7 @@
 # Pipeline 规格确认门（Spec Approve Gate）——前端对接协议
 
 > 版本：v1（feat/spec-approve 分支引入）
-> 适用范围：`POST /api/pipeline` 的首次生成（web-app / game / fullstack-app SOP）；modify（对话迭代）SOP 无确认门。
+> 适用范围：`POST /api/pipeline` 的首次生成 SOP（web-app / fullstack-app）；game（游戏精简流程）与 modify（对话迭代）SOP 跳过确认门——前端一律按「收到 `spec_ready` 才展示面板」实现即可天然兼容。
 > 本文档是 `docs/api.md` §3 的展开版，专注确认门这一条链路；通用约定（认证、错误格式、限流）见 api.md。
 
 ---
