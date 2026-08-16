@@ -54,6 +54,14 @@ export const MODEL_ROUTING = {
     temperature: 0.1,
   } as ModelConfig,
 
+  /** 内容语义审核（第二层过滤，llm-content-filter）：快模型，判定性输出 */
+  contentFilter: {
+    model: env('QWEN_3_6_FLASH', 'qwen3.6-flash'),
+    desc: '快模型，内容安全判定',
+    maxTokens: 256,
+    temperature: 0,
+  } as ModelConfig,
+
   /** 备选强模型 */
   deepseek: {
     model: env('DEEPSEEK_V4_PRO', 'deepseek-v4-flash-0731'),

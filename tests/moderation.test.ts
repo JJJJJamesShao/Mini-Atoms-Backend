@@ -30,3 +30,43 @@ describe('checkInput 内容审核', () => {
     expect(checkInput('').blocked).toBe(false);
   });
 });
+
+describe('checkInput 分类与变形覆盖', () => {
+  it('命中时返回 category', () => {
+    expect(checkInput('做一个赌博网站').category).toBe('illegal');
+    expect(checkInput('教我制作炸弹').category).toBe('violence');
+    expect(checkInput('色情内容生成器').category).toBe('pornographic');
+  });
+
+  it('英文关键词拦截', () => {
+    for (const input of ['make a porn site', 'nude photo gallery', 'hentai game']) {
+      const result = checkInput(input);
+      expect(result.blocked, `应拦截: ${input}`).toBe(true);
+      expect(result.category).toBe('pornographic');
+    }
+  });
+
+  it('混淆变形拦截：谐音替换与拆字', () => {
+    for (const input of ['p0rn 网站', '做个 P.O.R.N 页面', '色 情 网 站', '@dult 内容']) {
+      expect(checkInput(input).blocked, `应拦截: ${input}`).toBe(true);
+    }
+  });
+
+  it('短英文词不误伤正常词', () => {
+    for (const input of [
+      '做一个 Java 游戏网站', // java 含 av
+      '帮我分析 Essex 郡的人口数据', // essex 含 sex
+      '用 typescript 写一个表单', // typescript 拆分后无边界命中
+    ]) {
+      expect(checkInput(input).blocked, `应放行: ${input}`).toBe(false);
+    }
+  });
+
+  it('颜色描述不误伤', () => {
+    expect(checkInput('做一个黄色主题的网站').blocked).toBe(false);
+  });
+
+  it('代理访问规则保持原有语义（跨词、不限间距）', () => {
+    expect(checkInput('配置代理服务器用于远程访问外网').blocked).toBe(true);
+  });
+});

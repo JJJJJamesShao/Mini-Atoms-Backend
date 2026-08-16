@@ -34,6 +34,11 @@ const envSchema = z.object({
 
   // MOCK_LLM=1 时 pipeline 使用罐头执行器（零 key 冒烟验证，见 routes/pipeline）
   MOCK_LLM: z.string().optional(),
+
+  // 第二层 LLM 语义内容过滤（按 token 计费）：='true' 开启，默认关闭；
+  // 关键词层通过后才触发。置信度超过阈值才拦截（默认 0.7，减少误杀）
+  LLM_FILTER_ENABLED: z.string().optional(),
+  LLM_FILTER_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
 });
 
 export type Env = z.infer<typeof envSchema>;
