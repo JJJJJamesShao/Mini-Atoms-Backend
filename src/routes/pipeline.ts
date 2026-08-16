@@ -61,10 +61,14 @@ async function moderatePipelineInput(request: FastifyRequest, reply: FastifyRepl
   if (typeof input !== 'string' || !input) return; // 缺 input 由 handler 统一 400
   const result = checkInput(input);
   if (result.blocked) {
-    request.log.info({ userId: request.user?.sub }, '内容审核拦截');
+    request.log.info(
+      { userId: request.user?.sub, category: result.category },
+      '内容审核拦截',
+    );
     return reply.code(400).send({
       error: 'CONTENT_BLOCKED',
       message: result.message,
+      category: result.category,
       detail: '根据相关法律法规，部分敏感内容无法处理。',
     });
   }

@@ -60,7 +60,7 @@
 
 前置拦截（按此顺序，均未通过前不产生任何费用）：
 
-1. **内容审核**：命中敏感词 → `400 CONTENT_BLOCKED`
+1. **内容审核**：命中敏感词 → `400 CONTENT_BLOCKED`，响应体含 `category` 字段（`pornographic`｜`violence`｜`illegal`｜`hate`｜`self_harm`），前端可据此差异化提示；覆盖中文/英文关键词与常见混淆变形（`p0rn`、拆字等）
 2. **登录**：`401 unauthorized`
 3. **项目归属**（仅迭代）：`404 project_not_found`｜`403 forbidden`
 4. **额度**：超限 → `429 quota_exceeded`
