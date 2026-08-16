@@ -24,4 +24,9 @@ describe('rawTokenOf', () => {
     expect(rawTokenOf(undefined)).toBeNull();
     expect(rawTokenOf('Basic xyz')).toBeNull();
   });
+
+  it('scheme 大小写不敏感（与 @fastify/jwt 验签规则一致，防黑名单绕过）', () => {
+    expect(rawTokenOf('bearer abc.def.ghi')).toBe('abc.def.ghi');
+    expect(rawTokenOf('BEARER abc.def.ghi')).toBe('abc.def.ghi');
+  });
 });

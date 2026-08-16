@@ -31,8 +31,8 @@ export function isBlacklisted(token: string): boolean {
   return true;
 }
 
-/** 从 Authorization 头取原始 token 串（blacklist 的 key） */
+/** 从 Authorization 头取原始 token 串（blacklist 的 key）。scheme 大小写不敏感——@fastify/jwt 同样不敏感，若这里只认大写，小写 bearer 可绕过黑名单 */
 export function rawTokenOf(authorizationHeader: string | undefined): string | null {
-  if (!authorizationHeader?.startsWith('Bearer ')) return null;
-  return authorizationHeader.slice(7);
+  const match = /^Bearer\s+(.+)$/i.exec(authorizationHeader ?? '');
+  return match?.[1] ?? null;
 }
