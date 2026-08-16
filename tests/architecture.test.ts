@@ -189,7 +189,7 @@ describe('runSOP × Topic 消息池', () => {
       bus.subscribeTopic(topic, (m) => published.push(m));
     }
 
-    const out = await runSOP('做一个电商网站', DEFAULT_SOP, makeExecutors(), async () => true, bus);
+    const out = await runSOP('做一个电商网站', DEFAULT_SOP, makeExecutors(), async () => ({ approved: true }), bus);
 
     expect(out.finalState).toBe('done');
     const topics = published.map((m) => m.topic);

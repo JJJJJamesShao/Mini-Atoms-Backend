@@ -26,6 +26,8 @@ import type {
 
 /** verify 失败后允许的最大修复次数（含多轮 Patch），用尽则 fail */
 const MAX_FIX_ATTEMPTS = 5;
+/** 规格被用户拒绝后带反馈重生的最大次数，用尽则 fail（spec_rejected） */
+const MAX_SPEC_ATTEMPTS = 3;
 /** 步数上限，防止 SOP 配置错误导致死循环 */
 const MAX_STEPS = 50;
 
@@ -62,6 +64,10 @@ interface ExecutionContext {
   patchOutput: PatchOutput | null;
   /** modify SOP：apply/verify 失败详情，作为下一轮 patch 的反馈 */
   patchFeedback: string | undefined;
+  /** approve 拒绝回路：用户的规格修改意见（回喂 spec 重新生成） */
+  specFeedback: string | undefined;
+  /** approve 拒绝次数（上限 MAX_SPEC_ATTEMPTS） */
+  specAttempts: number;
 }
 
 /**
@@ -125,6 +131,8 @@ export async function runSOP(
     locate: null,
     patchOutput: null,
     patchFeedback: undefined,
+    specFeedback: undefined,
+    specAttempts: 0,
   };
 
   let current: string | undefined = sop.steps[0]?.name;
@@ -266,7 +274,9 @@ async function executeStep(
     }
     case 'spec': {
       if (!ctx.clarify) throw new Error('spec 步骤缺少 clarify 产物');
-      const out = await executors.spec(ctx.clarify);
+      // approve 拒绝回路：带用户反馈重生规格；feedback 消费后清空防残留
+      const out = await executors.spec(ctx.clarify, ctx.specFeedback);
+      ctx.specFeedback = undefined;
       ctx.spec = out;
       return out;
     }
@@ -278,15 +288,34 @@ async function executeStep(
         role: roleName,
         message: '等待用户确认规格',
       });
-      const approved = approver ? await approver(ctx.spec) : true;
+      const decision = approver
+        ? await approver(ctx.spec, ctx.clarify)
+        : { approved: true as const };
+      // 输出单字段 decision 供 SOP 条件路由：confirmed / retry / rejected
+      let decisionText: 'confirmed' | 'retry' | 'rejected';
+      if (decision.approved) {
+        decisionText = 'confirmed';
+      } else if (decision.feedback && ctx.specAttempts + 1 < MAX_SPEC_ATTEMPTS) {
+        ctx.specAttempts += 1;
+        ctx.specFeedback = decision.feedback;
+        decisionText = 'retry';
+      } else {
+        // 无反馈的纯拒绝，或重生次数用尽
+        decisionText = 'rejected';
+      }
       bus?.emit({
         type: 'agent:complete',
         agent: 'approve',
         role: roleName,
-        output: { approved },
-        message: approved ? '用户已确认规格' : '用户拒绝规格',
+        output: { decision: decisionText },
+        message:
+          decisionText === 'confirmed'
+            ? '用户已确认规格'
+            : decisionText === 'retry'
+              ? `用户要求修改规格（第 ${ctx.specAttempts} 次重生）`
+              : '用户拒绝规格',
       });
-      return { approved };
+      return { decision: decisionText };
     }
     case 'generate': {
       if (!ctx.spec) throw new Error('generate 步骤缺少 spec 产物');

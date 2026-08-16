@@ -490,7 +490,7 @@ export function createLLMExecutors(
       return result;
     },
 
-    spec: async (clarify) => {
+    spec: async (clarify, feedback) => {
       emit({
         type: 'agent:start',
         agent: 'spec',
@@ -508,6 +508,7 @@ export function createLLMExecutors(
         requirements: clarify.requirements?.length ? clarify.requirements : [clarify.summary],
         constraints: clarify.constraints,
         assumptions: clarify.assumptions,
+        feedback,
       });
       const config = MODEL_ROUTING.spec;
       console.log('[DEBUG] Spec 请求:', {

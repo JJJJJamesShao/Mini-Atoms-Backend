@@ -1,19 +1,19 @@
-# L2 快速评审任务：安全加固（限流 / CORS / Token / 输入防护）
+# L2 快速评审任务：Pipeline 规格确认门 + 暂停恢复
 
 ## 评审范围
-- diff：`git diff main...HEAD`（feat/security-hardening：新增 `src/lib/rate-limits.ts`、`src/lib/token-blacklist.ts`、`tests/rate-limit.test.ts`、`tests/token-blacklist.test.ts`；改 `src/index.ts`（rate-limit 插件/CORS/helmet/bodyLimit/413）、`src/middleware/authenticate.ts`（黑名单+token_expired+拒 refresh）、`src/routes/auth.ts`（双令牌+/refresh+/logout）、`src/routes/projects.ts`（分层限流+input 上限）、`src/routes/pipeline.ts`（input 上限）、`src/config/env.ts`、`docs/api.md`、`.env.example`，及本任务文件自身更新）
+- diff：`git diff main...HEAD`（feat/spec-approve：新增 `src/services/pending-approvals.ts`、`tests/spec-approve.test.ts`、迁移 `drizzle/0002_*.sql`；改 `src/lib/agent/engine.ts`（approve 决策回路）、`src/lib/agent/sop.ts`（分支条件 approved→decision）、`src/lib/agent/index.ts`（Approver 类型）、`src/lib/llm/prompts.ts` + `src/lib/agent/llm-executors.ts`（spec 接 feedback）、`src/routes/pipeline.ts`（approver 接线 + spec_ready 事件 + /api/pipeline/approve）、`src/models/schema.ts` + `src/services/projects.ts`（confirmed_spec/spec_status）、`src/config/env.ts`、`tests/sop|architecture|heavy-load.test.ts`（Approver 接口适配，仅签名）、`docs/api.md`、`.env.example`，及本任务文件自身更新）
 - 除 diff 外，允许查看变更文件的**直接关联上下文**，不评审未变更的无关文件
 
 ## 背景与有意决策（评审前必读）
-- **Pipeline 不加新限流**：已有滑动窗口额度制（free 5 次/2h，paid 不限），用户确认过额度制已覆盖成本控制，突发限流对 paid 是负优化
-- **JWT 30d → access 2h + refresh 7d**：用户确认的协议级变更；refresh token 带 `type` 字段，authenticate 拒绝 type=refresh 冒充
-- **黑名单为内存 Map**：单进程部署（ECS+pm2）可靠，重启清空可接受（access 仅 2h）；多实例才需 Redis
-- **keyGenerator 用 jwt.decode 不验签**：rate-limit 的 onRequest 钩子在 authenticate 之前，request.user 未填充；伪造 sub 最多绕过每用户维度，IP 维度与 DB 额度仍在
-- **allowList 用函数形式**：字符串形式匹配的是 IP 不是路径（实测踩坑）
-- **errorResponseBuilder 必须自带 statusCode: 429**：插件把返回值当 error 对象发送，缺省变 500（实测踩坑）
-- **X-XSS-Protection 保持 helmet 默认 `0`**：任务包要求的 `1; mode=block` 是已废弃的过时建议（现代浏览器该头可引入漏洞），有意偏离
-- **阶段六（IP 异常监控）不做**：任务包标注可选
-- 新增依赖 @fastify/rate-limit@^11（首个非初始依赖）
+- 确认门曾存在并被改为自动确认（serverless 多实例内存不可见）；Fastify 单进程下恢复为真实挂起，由任务包明确要求
+- **挂起按 userId 维度**（与 runs 注册表同构：同用户同时只有一条活跃运行）；approve 的 project_id 仅做匹配校验
+- **用户友好规格 = clarify 产物**（summary/requirements/openQuestions），不新增 LLM 转写调用（用户确认）；raw 字段放技术规格
+- **modifications 仅存证不影响生成**（用户确认）；改内容走拒绝+feedback 重生路径
+- 超时（默认 5 分钟，PIPELINE_APPROVE_TIMEOUT_MS）自动通过；abort 解除挂起后 approver 抛错走「手动停止」落库路径（不当 spec_rejected）
+- 重生上限：引擎 MAX_SPEC_ATTEMPTS=3（首次 + 2 次重生，第 3 次拒绝 fail）
+- MOCK_LLM=1 / PIPELINE_AUTO_APPROVE=true 恒自动确认（冒烟与旧行为开关）
+- 迁移 0002 已手动应用到 dev 库（drizzle-kit migrate 挂起为已知问题）
+- 真实链路冒烟已通过（真 key：spec_ready→拒绝+反馈→二次 spec_ready→确认→生成→落库 confirmed_spec）
 
 ## 输出要求
 - **只报告 blocking 级别问题**（正确性、安全、协议不兼容、资源泄漏）

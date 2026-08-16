@@ -143,7 +143,7 @@ describe('SOP 配置完整性', () => {
 describe('runSOP 执行引擎', () => {
   it('web-app happy path：approve 通过 → done，顺序执行', async () => {
     const { executors, calls } = makeExecutors();
-    const approver = vi.fn(async () => true);
+    const approver = vi.fn(async () => ({ approved: true }));
     const out = await runSOP('做一个电商网站', DEFAULT_SOP, executors, approver);
 
     expect(out.finalState).toBe('done');
@@ -154,7 +154,7 @@ describe('runSOP 执行引擎', () => {
 
   it('web-app approve 拒绝 → fail(spec_rejected)，不进入 generate', async () => {
     const { executors, calls } = makeExecutors();
-    const out = await runSOP('做一个电商网站', DEFAULT_SOP, executors, async () => false);
+    const out = await runSOP('做一个电商网站', DEFAULT_SOP, executors, async () => ({ approved: false }));
 
     expect(out.finalState).toBe('fail');
     expect(out.reason).toBe('spec_rejected');
@@ -175,7 +175,7 @@ describe('runSOP 执行引擎', () => {
 
   it('clarify 需要澄清 → fail(need_clarification)', async () => {
     const { executors } = makeExecutors({ clarify: async () => NEED_CLARIFY });
-    const out = await runSOP('随便做点什么', DEFAULT_SOP, executors, async () => true);
+    const out = await runSOP('随便做点什么', DEFAULT_SOP, executors, async () => ({ approved: true }));
 
     expect(out.finalState).toBe('fail');
     expect(out.reason).toBe('need_clarification');
@@ -224,7 +224,7 @@ describe('runSOP 执行引擎', () => {
       locate: async (input) => ({ intent: input, anchors: [] }),
       patch: async (locate) => ({ patchText: '', notes: locate.intent }),
     };
-    const out = await runSOP('做一个带登录的博客', FULLSTACK_SOP, executors, async () => true);
+    const out = await runSOP('做一个带登录的博客', FULLSTACK_SOP, executors, async () => ({ approved: true }));
 
     expect(out.finalState).toBe('done');
     expect(calls).toEqual(['generate:schema', 'generate:shell', 'generate:pages']);
@@ -268,7 +268,7 @@ describe('runSOP 执行引擎', () => {
       locate: async (input) => ({ intent: input, anchors: [] }),
       patch: async (locate) => ({ patchText: '', notes: locate.intent }),
     };
-    const out = await runSOP('做一个带登录的博客', FULLSTACK_SOP, executors, async () => true);
+    const out = await runSOP('做一个带登录的博客', FULLSTACK_SOP, executors, async () => ({ approved: true }));
 
     expect(out.finalState).toBe('done');
     // schema 生成两次（第二次带错误信息重修），shell/pages 各一次且无错误污染
@@ -306,7 +306,7 @@ describe('runSOP 执行引擎', () => {
       locate: async (input) => ({ intent: input, anchors: [] }),
       patch: async (locate) => ({ patchText: '', notes: locate.intent }),
     };
-    const out = await runSOP('做一个带登录的博客', FULLSTACK_SOP, executors, async () => true);
+    const out = await runSOP('做一个带登录的博客', FULLSTACK_SOP, executors, async () => ({ approved: true }));
 
     expect(out.finalState).toBe('done');
     expect(pagesCalls).toBe(2);

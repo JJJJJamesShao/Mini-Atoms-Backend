@@ -54,6 +54,11 @@ const envSchema = z.object({
   // 请求防护：请求体上限 + pipeline 输入最大长度
   MAX_BODY_SIZE: z.coerce.number().int().positive().default(1_048_576),
   MAX_INPUT_LENGTH: z.coerce.number().int().positive().default(4_000),
+
+  // Pipeline 规格确认门：='true' 时自动通过（旧行为）；MOCK_LLM=1 冒烟恒自动通过。
+  // 等待用户确认的超时（默认 5 分钟），超时自动确认防无限挂起
+  PIPELINE_AUTO_APPROVE: z.string().optional(),
+  PIPELINE_APPROVE_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

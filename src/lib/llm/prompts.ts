@@ -473,6 +473,8 @@ export function buildSpecPrompt(clarify: {
   requirements: string[];
   constraints?: string[];
   assumptions?: string[];
+  /** approve 拒绝回路：用户对上一版规格的修改意见 */
+  feedback?: string;
 }) {
   let content = '需求：\n- ' + clarify.requirements.join('\n- ');
   if (clarify.constraints && clarify.constraints.length > 0) {
@@ -480,6 +482,9 @@ export function buildSpecPrompt(clarify: {
   }
   if (clarify.assumptions && clarify.assumptions.length > 0) {
     content += '\n\n已确认的假设：\n- ' + clarify.assumptions.join('\n- ');
+  }
+  if (clarify.feedback) {
+    content += '\n\n用户对上一版规格不满意，修改意见如下，请据此调整规格：\n' + clarify.feedback;
   }
   return [
     { role: 'system' as const, content: SYSTEM_SPEC },
