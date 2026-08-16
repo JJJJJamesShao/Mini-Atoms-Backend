@@ -71,7 +71,7 @@ const SENSITIVE_RULES: FilterRule[] = [
 
 /** 不宜纯关键词化的既有规则（跨词模式），保留正则形式 */
 const REGEX_RULES: Array<{ pattern: RegExp; category: ContentCategory; severity: Severity }> = [
-  { pattern: /代理.{0,4}访问/i, category: 'illegal', severity: 'medium' },
+  { pattern: /代理.*访问/i, category: 'illegal', severity: 'medium' },
 ];
 
 /** 常见混淆字符归一化（p0rn→porn、@dult→adult 等） */

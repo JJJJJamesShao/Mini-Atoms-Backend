@@ -57,15 +57,14 @@ function failReasonText(reason: string | null): string {
 }
 
 /**
- * 内容审核 preHandler：最先执行，命中即 400，不消耗鉴权/额度。
- * 第一层关键词过滤零成本；第二层 LLM 语义过滤按 token 计费，
- * 默认关闭（LLM_FILTER_ENABLED=true 开启），MOCK_LLM=1 冒烟时不触发。
+ * 内容审核 preHandler（第一层关键词过滤）：零成本，最先执行，命中即 400。
+ * 第二层 LLM 语义过滤按 token 计费，在 handler 内鉴权与额度检查之后执行
+ * （见 moderateByLLM）——计费调用绝不能暴露在匿名入口。
  */
 async function moderatePipelineInput(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const input = (request.body as { input?: unknown } | null)?.input;
   if (typeof input !== 'string' || !input) return; // 缺 input 由 handler 统一 400
 
-  // 第一层：关键词过滤
   const result = checkInput(input);
   if (result.blocked) {
     request.log.info(
@@ -79,32 +78,43 @@ async function moderatePipelineInput(request: FastifyRequest, reply: FastifyRepl
       detail: '根据相关法律法规，部分敏感内容无法处理。',
     });
   }
+}
 
-  // 第二层：LLM 语义过滤（仅第一层通过后触发）
+/**
+ * 第二层 LLM 语义过滤：handler 内鉴权 + 额度检查之后调用。
+ * 返回 true 表示已拦截并写回 400。传输层故障 fail-open（打 error 日志放行）：
+ * 关键词层已通过，审核服务异常不应拖垮 pipeline 主链路。
+ */
+async function moderateByLLM(
+  input: string,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<boolean> {
   const env = loadEnv();
-  if (env.LLM_FILTER_ENABLED !== 'true' || env.MOCK_LLM === '1') return;
+  if (env.LLM_FILTER_ENABLED !== 'true' || env.MOCK_LLM === '1') return false;
   try {
     const llmResult = await filterByLLM(input);
     if (!llmResult.safe && llmResult.confidence > env.LLM_FILTER_THRESHOLD) {
       request.log.info(
         {
-          userId: request.user?.sub,
+          userId: request.user.sub,
           category: llmResult.category,
           confidence: llmResult.confidence,
         },
         '内容审核拦截（语义层）',
       );
-      return reply.code(400).send({
+      await reply.code(400).send({
         error: 'CONTENT_BLOCKED',
         message: '输入内容疑似违规，请修改后重试。',
-        category: llmResult.category,
+        category: llmResult.category, // 保守拦截时缺省，见 docs/api.md
         detail: llmResult.reason,
       });
+      return true;
     }
   } catch (err) {
-    // 传输层故障 fail-open：关键词层已通过，审核服务异常不应拖垮 pipeline
     request.log.error({ err }, 'LLM 语义审核调用失败，放行');
   }
+  return false;
 }
 
 /**
@@ -159,6 +169,9 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
           message: `免费额度已用完：每 2 小时可生成 ${FREE_LIMIT} 次，请稍后再试或联系管理员升级`,
         });
       }
+
+      // 第二层内容审核（LLM 语义过滤，计费）：必须位于鉴权与额度检查之后
+      if (await moderateByLLM(input, request, reply)) return;
 
       // 记用量
       await logUsage(userId, 'generate');

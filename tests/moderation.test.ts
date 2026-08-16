@@ -65,4 +65,8 @@ describe('checkInput 分类与变形覆盖', () => {
   it('颜色描述不误伤', () => {
     expect(checkInput('做一个黄色主题的网站').blocked).toBe(false);
   });
+
+  it('代理访问规则保持原有语义（跨词、不限间距）', () => {
+    expect(checkInput('配置代理服务器用于远程访问外网').blocked).toBe(true);
+  });
 });
