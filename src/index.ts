@@ -74,6 +74,18 @@ async function main() {
   // 统一错误处理
   app.setErrorHandler((error: unknown, request, reply) => {
     request.log.error(error);
+    // @fastify/rate-limit 以 throw 方式抛出 errorResponseBuilder 返回的纯对象
+    // （非 Error 实例），必须原样下发，否则被 String() 成 "[object Object]"
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      !(error instanceof Error) &&
+      'statusCode' in error &&
+      'error' in error
+    ) {
+      const body = error as Record<string, unknown>;
+      return reply.status(Number(body.statusCode) || 500).send(body);
+    }
     const err = error instanceof Error ? error : new Error(String(error));
     const statusCode =
       typeof (error as { statusCode?: unknown })?.statusCode === 'number'

@@ -40,6 +40,25 @@ describe('@fastify/rate-limit 集成', () => {
     });
     app.get('/health', async () => ({ status: 'ok' }));
     app.get('/ping', async () => ({ ok: true }));
+    // 与 src/index.ts 同款错误处理器：回归「429 响应体被 setErrorHandler 改写」事故
+    app.setErrorHandler((error: unknown, request, reply) => {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        !(error instanceof Error) &&
+        'statusCode' in error &&
+        'error' in error
+      ) {
+        const body = error as Record<string, unknown>;
+        return reply.status(Number(body.statusCode) || 500).send(body);
+      }
+      const err = error instanceof Error ? error : new Error(String(error));
+      const statusCode =
+        typeof (error as { statusCode?: unknown })?.statusCode === 'number'
+          ? (error as { statusCode: number }).statusCode
+          : 500;
+      reply.status(statusCode).send({ statusCode, error: err.name, message: err.message });
+    });
     return app;
   }
 
