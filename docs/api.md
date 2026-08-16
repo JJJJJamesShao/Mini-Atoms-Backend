@@ -149,10 +149,25 @@
 ### GET /api/projects
 
 ```json
-{ "projects": [{ "id", "user_id", "title", "pinned": false, "created_at": "ISO8601" }] }
+{ "projects": [{ "id", "user_id", "title", "status": "ready", "input_preview": null, "pinned": false, "created_at": "ISO8601" }] }
 ```
 
-置顶优先、其余按创建时间倒序。
+置顶优先、其余按创建时间倒序。`status`：`summarizing`（草稿，标题 LLM 摘要中）｜`ready`（终态）；`input_preview` 为首条输入前 100 字（仅 draft 入口写入，其余为 null）。
+
+### POST /api/projects/draft
+
+秒级创建草稿项目（标题 LLM 摘要异步收尾，不阻塞响应）：
+
+```json
+// 请求
+{ "input": "帮我做一个个人博客网站" }
+// 201
+{ "project": { "id", "user_id", "title": "帮我做一个个人博客网站（截断占位）", "status": "summarizing", "input_preview": "...", "pinned": false, "created_at" } }
+```
+
+- 标题先以输入截断占位，LLM 摘要完成后 `status` 变 `ready`（前端可轮询 `GET /api/projects` 或下次刷新时更新）；摘要失败静默降级为截断标题
+- 前置拦截：登录 `401`；关键词内容审核 `400 CONTENT_BLOCKED`
+- 后续生成走 `POST /api/pipeline` 迭代模式（`input` + `projectId`，不传 `currentFiles`）：草稿 0 版本 → 创建版本 1，SSE 发 `project_updated`（非 `project_created`）；`GET /api/projects/:id` 在版本 1 落库前 `versions` 为空数组，前端需判空
 
 ### GET /api/projects/:id
 

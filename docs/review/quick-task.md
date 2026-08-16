@@ -1,16 +1,16 @@
-# L2 快速评审任务：输入内容审核增强（关键词层 + LLM 语义层）
+# L2 快速评审任务：草稿项目 API + 标题异步摘要
 
 ## 评审范围
-- diff：`git diff main...HEAD`（feat/content-filter：①重写 `src/lib/moderation.ts` 为分类词库 + 反混淆归一化；②新增 `src/lib/llm-content-filter.ts` 语义过滤层（默认关闭）；③`src/routes/pipeline.ts` 400 响应加 `category` + 两层集成；④`src/lib/llm/models.ts` 加 contentFilter 路由、`src/config/env.ts` 加 LLM_FILTER_* 开关；⑤测试扩展与 `docs/api.md`/`.env.example` 同步，及本任务文件自身更新）
+- diff：`git diff main...HEAD`（feat/project-draft：projects 表加 `status`/`input_preview` + 迁移 `drizzle/0001_*.sql`、`src/services/projects.ts` 草稿创建/定稿、`src/lib/title-generator.ts` 新增、`src/lib/llm/models.ts` 加 title 路由、`src/routes/projects.ts` 新增 POST /api/projects/draft、`tests/title-generator.test.ts`、`docs/api.md`，及本任务文件自身更新）
 - 除 diff 外，允许查看变更文件的**直接关联上下文**（调用方/被引用方/相关类型定义），不评审未变更的无关文件
 
 ## 背景
-- 本仓库已有入口内容审核（moderation.ts 的 checkInput，pipeline 路由 preHandler 命中即 400），本次是增强而非新建
-- 第一层误杀防护是重点：短英文词（av/sex/xxx/vpn）仅词边界匹配，否则 "java" 含 "av"、"essex" 含 "sex" 会误拦正常开发需求
-- 第二层（LLM 语义过滤）复用 callJsonLlm + 百炼快模型，成本敏感：仅第一层通过后触发、maxAttempts=2、置信度 > LLM_FILTER_THRESHOLD（默认 0.7）才拦截；**位于 handler 内鉴权 + 额度检查之后**（计费调用不能暴露在匿名入口）
-- 第二层失败语义：模型输出多次解析失败/结构不符 → 保守拦截；传输层错误（超时/网关故障）→ 路由层 fail-open（审核服务故障不拖垮 pipeline）。两条均为有意设计
-- 已有行为不得回归：原有中文正则拦截全部保留
-- 前端实时检测（阶段三）明确不在本次范围
+- 产品流程：前端先 POST /api/projects/draft 秒级拿 projectId，再走 POST /api/pipeline 迭代模式（0 版本草稿 → 版本 1，SSE 发 project_updated 而非 project_created——已核实 nextVersionNo=versions.length+1 对空数组成立）
+- 标题摘要为 fire-and-forget 异步任务：Fastify 单进程长驻（非 serverless），失败降级为截断标题并打 warn 日志；MOCK_LLM=1 冒烟模式不调 LLM 直接定稿
+- 标题生成复用 streamChat + collectStreamText（生产禁用非流式 chat，见 llm/client.ts 历史事故注释），5s 硬超时
+- draft 是自由文本入口，与 pipeline 一致走关键词层审核
+- 迁移已手动应用到 dev 库（drizzle-kit migrate 挂起是仓库已知问题），journal 已补
+- 任务包原稿与仓库的偏差（有意为之）：复用现有 BAILIAN 快模型而非新建 LIGHTWEIGHT_LLM_API_KEY fetch 封装；schema 在 src/models/schema.ts 且 user_id 保持 nullable（演示数据约定）
 
 ## 输出要求
 - **只报告 blocking 级别问题**（正确性、安全、协议不兼容、资源泄漏）

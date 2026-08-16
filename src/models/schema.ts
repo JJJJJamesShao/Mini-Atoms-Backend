@@ -49,6 +49,13 @@ export const projects = pgTable('projects', {
   // 兼容 mini-atoms 语义：user_id 为 null 的历史演示数据对所有登录用户可见
   userId: uuid('user_id').references(() => users.id),
   title: text('title').notNull(),
+  // 标题状态：summarizing=草稿（LLM 摘要进行中），ready=终态可展示。
+  // 既有数据与 pipeline 直建项目默认 ready，仅 draft 接口经历 summarizing
+  status: text('status', { enum: ['summarizing', 'ready'] })
+    .notNull()
+    .default('ready'),
+  // 首条输入前 100 字，列表预览用（draft 接口写入，其余入口为 null）
+  inputPreview: text('input_preview'),
   pinned: boolean('pinned').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -62,6 +62,14 @@ export const MODEL_ROUTING = {
     temperature: 0,
   } as ModelConfig,
 
+  /** 草稿项目标题摘要（title-generator）：快模型，极短输出 */
+  title: {
+    model: env('QWEN_3_6_FLASH', 'qwen3.6-flash'),
+    desc: '快模型，标题摘要',
+    maxTokens: 30,
+    temperature: 0.3,
+  } as ModelConfig,
+
   /** 备选强模型 */
   deepseek: {
     model: env('DEEPSEEK_V4_PRO', 'deepseek-v4-flash-0731'),
