@@ -27,8 +27,8 @@ jobs:
             npm install
             echo "Building..."
             npm run build
-            echo "Running migrations..."
-            npm run db:migrate
+            # echo "Running migrations..."
+            # npm run db:migrate
             echo "Restarting service..."
             pm2 restart mini-atoms || pm2 start dist/index.js --name mini-atoms
             echo "Deploy complete!"
