@@ -29,6 +29,7 @@ import {
   pendingProjectOf,
 } from '../services/pending-approvals.js';
 import { writeLimit } from '../lib/rate-limits.js';
+import { corsOriginAllowed } from '../lib/cors.js';
 import type { Approver } from '../lib/agent/index.js';
 import { loadEnv } from '../config/env.js';
 
@@ -188,12 +189,20 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
 
       // SSE：hijack 后 Fastify 错误处理不再接管，流内所有异常自行捕获
       reply.hijack();
+      // hijack 后 @fastify/cors 的 onSend 钩子不再执行，跨域头必须手动补：
+      // Origin 命中白名单时回显，否则省略（浏览器自行拦截）。
+      // 判定与 index.ts 的 cors 注册共用 lib/cors.ts 同一事实源。
+      const reqOrigin = request.headers.origin;
+      const sseCorsHeaders = corsOriginAllowed(reqOrigin)
+        ? { 'Access-Control-Allow-Origin': reqOrigin as string, Vary: 'Origin' }
+        : {};
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
         // Nginx 反代默认缓冲响应，SSE 会整段攒到结束才下发——显式关闭
         'X-Accel-Buffering': 'no',
+        ...sseCorsHeaders,
       });
       // 前端断开（关页/停止按钮本地断流）即取消 LLM 调用：
       // 必须监听响应侧 close——request.raw 在客户端断开时不会可靠触发
