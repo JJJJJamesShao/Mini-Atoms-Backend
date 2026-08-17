@@ -5,6 +5,7 @@ import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import { loadEnv } from './config/env.js';
 import { closeDb } from './config/database.js';
+import { corsOriginAllowed } from './lib/cors.js';
 import { authRoutes } from './routes/auth.js';
 import { pipelineRoutes } from './routes/pipeline.js';
 import { projectRoutes } from './routes/projects.js';
@@ -26,14 +27,10 @@ async function main() {
   });
 
   // CORS：生产仅允许 CORS_ORIGINS 配置的域名（缺省 = 禁跨域，仅同源）；
-  // 开发允许本地常见前端端口。预检缓存 24h。
-  const corsOrigins = env.CORS_ORIGINS
-    ? env.CORS_ORIGINS.split(',').map((o) => o.trim())
-    : isProd
-      ? false
-      : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'];
+  // 开发允许本地常见前端端口。预检缓存 24h。判定逻辑见 lib/cors.ts
+  // （与 pipeline 的 hijacked SSE 响应共用同一事实源）。
   await app.register(cors, {
-    origin: corsOrigins,
+    origin: (origin, cb) => cb(null, corsOriginAllowed(origin)),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     maxAge: 86_400,
   });

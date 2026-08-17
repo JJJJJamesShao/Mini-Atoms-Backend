@@ -1,13 +1,14 @@
-# L2 快速评审任务：项目详情接口补全会话历史
+# L2 快速评审任务：hijacked SSE 响应补 CORS 头
 
 ## 评审范围
-- diff：`git diff main...HEAD`（feat/project-messages：`GET /api/projects/:id` 响应新增 `messages` 字段（复用既有 `getMessages`，created_at 正序），`docs/api.md` 同步，及本任务文件自身更新）
+- diff：`git diff main...HEAD`（feat/sse-cors-header：pipeline SSE hijack 响应手动补 Access-Control-Allow-Origin；新增 `src/lib/cors.ts` 共享判定，`src/index.ts` cors 注册改为函数形式复用同一事实源，及本任务文件自身更新）
 - 除 diff 外，允许查看变更文件的**直接关联上下文**，不评审未变更的无关文件
 
 ## 背景
-- messages 表与 getMessages 早已存在，pipeline 每次运行落库 user/assistant 各一条；本 diff 只是详情接口补下发（任务包路径写的是旧 Next.js 仓库，已映射到 Fastify 路由）
-- 归属校验在外层（403/404 既有行为不变），messages 查询按 projectId 无需再过滤
-- 已冒烟：MOCK_LLM 罐头流水线跑通后，详情接口返回正序 user/assistant 两条
+- 问题：reply.hijack() 后 @fastify/cors 的 onSend 钩子不执行，SSE 流丢跨域头，浏览器拦截
+- 原 commit 的白名单解析与 index.ts CORS 配置分叉（dev 默认端口不覆盖、两处各自解析），已重构为共享判定 corsOriginAllowed（唯一事实源）
+- 认证走 Bearer token 不用 cookie，白名单回显无凭证泄露面
+- 已冒烟：dev 白名单 Origin 直连 SSE 有 ACAO 回显；非白名单 Origin 无 ACAO
 
 ## 输出要求
 - **只报告 blocking 级别问题**（正确性、安全、协议不兼容、资源泄漏）
