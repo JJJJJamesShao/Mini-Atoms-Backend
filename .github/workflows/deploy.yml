@@ -22,6 +22,8 @@ jobs:
             set -e
             cd /root/proj/Mini-Atoms-Backend
             echo "Pulling latest code..."
+            # npm install 可能改动 lockfile，先丢弃本地修改保证 pull 不冲突
+            git checkout -- package-lock.json
             git pull origin main
             echo "Installing dependencies..."
             npm install
