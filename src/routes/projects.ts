@@ -13,6 +13,7 @@ import {
   togglePinProject,
 } from '../services/projects.js';
 import { getVersions } from '../services/versions.js';
+import { getMessages } from '../services/messages.js';
 import { countUsers, getUserRole } from '../services/users.js';
 import { countUsageInWindow, logUsage } from '../services/usage.js';
 import { readLimit, writeLimit } from '../lib/rate-limits.js';
@@ -125,7 +126,9 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
         return reply.code(403).send({ error: 'forbidden', message: '无权访问该项目' });
       }
       const versions = await getVersions(id);
-      return { project, versions };
+      // 会话历史随详情下发：前端刷新后重建对话气泡（按 created_at 正序）
+      const projectMessages = await getMessages(id);
+      return { project, versions, messages: projectMessages };
     },
   );
 
