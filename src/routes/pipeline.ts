@@ -188,12 +188,25 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
 
       // SSE：hijack 后 Fastify 错误处理不再接管，流内所有异常自行捕获
       reply.hijack();
+      // hijack 后 @fastify/cors 的 onSend 钩子不再执行，跨域头必须手动补：
+      // Origin 命中白名单（CORS_ORIGINS）时回显，否则省略（浏览器自行拦截）。
+      // 本地 dev 走 Vite proxy 同源访问，无 CORS_ORIGINS 时不影响。
+      const reqOrigin = request.headers.origin;
+      const corsWhitelist = (loadEnv().CORS_ORIGINS ?? '')
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean);
+      const sseCorsHeaders =
+        reqOrigin && corsWhitelist.includes(reqOrigin)
+          ? { 'Access-Control-Allow-Origin': reqOrigin, Vary: 'Origin' }
+          : {};
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
         // Nginx 反代默认缓冲响应，SSE 会整段攒到结束才下发——显式关闭
         'X-Accel-Buffering': 'no',
+        ...sseCorsHeaders,
       });
       // 前端断开（关页/停止按钮本地断流）即取消 LLM 调用：
       // 必须监听响应侧 close——request.raw 在客户端断开时不会可靠触发
