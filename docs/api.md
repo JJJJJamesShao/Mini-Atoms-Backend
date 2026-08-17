@@ -231,9 +231,12 @@ access token 过期后的静默刷新。前端应在收到带 `Token-Expired: tr
 ```json
 {
   "project": { "id", "user_id", "title", "pinned", "created_at" },
-  "versions": [Version, ...]   // 按 version_no 升序
+  "versions": [Version, ...],   // 按 version_no 升序
+  "messages": [{ "id", "project_id", "role": "user|assistant|system", "content", "created_at" }]  // 按 created_at 正序，无消息时为空数组
 }
 ```
+
+`messages` 为会话历史（每次 pipeline 运行落库 user/assistant 各一条），前端刷新后据此重建对话气泡。
 
 错误：`404 project_not_found`｜`403 forbidden`
 
