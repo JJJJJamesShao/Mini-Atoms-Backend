@@ -1,5 +1,7 @@
 # Mini-Atoms-Backend
 
+> 本项目已停止维护。
+
 Mini Atoms 的后端服务：Fastify 5 + TypeScript + Drizzle ORM + PostgreSQL，提供用户认证、项目管理，以及核心的 **Pipeline**（SSE 流式的 LLM 多阶段代码生成）。
 
 ## 技术栈
@@ -46,16 +48,9 @@ npm run lint       # eslint
 
 前后端对接的完整接口文档见 [`docs/api.md`](docs/api.md)：认证、projects CRUD、Pipeline SSE 事件协议、额度限制等。
 
-## 部署（GitHub Actions）
+## 历史运维记录
 
-push 到 `main` 时，`.github/workflows/deploy.yml` 自动 SSH 到 ECS 执行：git pull → npm install → build → pm2 重启。
-
-前置条件：
-
-- ECS：仓库克隆到 `/root/proj/Mini-Atoms-Backend`，已安装 node 与 pm2，`.env` 已就位
-- GitHub 仓库 Settings → Secrets → Actions 配置：`ECS_IP`、`ECS_USER`、`ECS_PASSWORD`
-
-**数据库迁移是部署前的手动步骤**（`drizzle-kit migrate` 在本环境挂起，属已知问题，deploy 流程中已移除该步骤）：合入含 schema 变更的 PR 前，先在 ECS 上应用对应迁移——
+**数据库迁移是手动步骤。** 原 ECS 环境的 `drizzle-kit migrate` 会挂起，因此迁移由运维人员在部署前应用。
 
 ```bash
 cd /root/proj/Mini-Atoms-Backend
@@ -65,7 +60,7 @@ sudo -u postgres psql -d mini_atoms_dev -c \
   "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('000X_xxx', <when>);"
 ```
 
-不迁移就部署会导致相关接口 500（缺列/缺表），务必先迁移后合并。
+运行依赖新 schema 的版本前，先应用对应的迁移，以免接口因缺列或缺表返回 500。
 
 手动运维命令：
 
